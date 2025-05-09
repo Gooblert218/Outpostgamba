@@ -1,0 +1,338 @@
+<meta charset="UTF-8">
+  <title>Cartoon Gambling Site</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(to bottom, #ffecd2, #fcb69f);
+      text-align: center;
+      margin: 0;
+    }
+    header {
+      background-color: #ff8c42;
+      padding: 20px;
+      font-size: 26px;
+      color: white;
+    }
+    .nav button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      border: none;
+      background: #fcd34d;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .section {
+      display: none;
+      padding: 30px;
+    }
+    .active {
+      display: block;
+    }
+    input, select {
+      padding: 8px;
+      font-size: 16px;
+      margin: 10px;
+      border-radius: 8px;
+      border: 2px solid #333;
+    }
+    .bet-controls button {
+      margin: 5px;
+      padding: 5px 15px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: none;
+      background: #fdba74;
+      cursor: pointer;
+    }
+    #balanceDisplay {
+      font-weight: bold;
+    }
+    .coin-container {
+      perspective: 1000px;
+      width: 150px;
+      height: 150px;
+      margin: 20px auto;
+    }
+    .coin {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 2s ease-in-out;
+    }
+    .front, .back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      background-color: gold;
+      border: 4px solid #222;
+    }
+    .back {
+      background-color: silver;
+      transform: rotateY(180deg);
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(5, 60px);
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .tile {
+      width: 60px;
+      height: 60px;
+      perspective: 600px;
+    }
+    .tile-inner {
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.6s;
+    }
+    .tile.flipped .tile-inner {
+      transform: rotateY(180deg);
+    }
+    .tile-front, .tile-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      border-radius: 10px;
+    }
+    .tile-front {
+      background: #fcd34d;
+    }
+    .tile-back.safe {
+      background: lightgreen;
+    }
+    .tile-back.bomb {
+      background: red;
+    }
+    .tile-back {
+      transform: rotateY(180deg);
+      color: white;
+    }
+  </style>
+
+
+  <header>
+    🌰 Cartoon Gambling Site – Balance: $<span id="balanceDisplay">1000.00</span>
+  </header>
+
+  <div class="nav">
+    <button onclick="showSection('home')">🏠 Home</button>
+    <button onclick="showSection('coinflip')">🪙 Coinflip</button>
+    <button onclick="showSection('mines')">💣 Mines</button>
+  </div>
+
+  <div id="home" class="section active">
+    <h2>Welcome! 🎉</h2>
+    <input id="amount" type="number" min="0.10" step="0.01" placeholder="Amount ($)">
+    <br>
+    <button onclick="deposit()">💰 Deposit</button>
+    <button onclick="withdraw()">💸 Withdraw</button>
+  </div>
+
+  <div id="coinflip" class="section">
+    <h2>🪙 Coinflip</h2>
+    <p>Choose a side and bet!</p>
+    <label>Bet Amount:</label>
+    <input id="coinBet" type="number" min="0.10" step="0.01" value="1.00">
+    <div class="bet-controls">
+      <button onclick="setBet('coinBet', 0.5)">1/2</button>
+      <button onclick="setBet('coinBet', 1)">Max</button>
+    </div>
+    <div class="coin-container">
+      <div class="coin" id="coin">
+        <div class="front">Heads</div>
+        <div class="back">Tails</div>
+      </div>
+    </div>
+    <button onclick="flipCoin('heads')">Heads</button>
+    <button onclick="flipCoin('tails')">Tails</button>
+    <p id="coinflipResult"></p>
+  </div>
+
+  <div id="mines" class="section">
+    <h2>💣 Mines</h2>
+    <label>Bet Amount:</label>
+    <input id="minesBet" type="number" min="0.10" step="0.01" value="1.00">
+    <div class="bet-controls">
+      <button onclick="setBet('minesBet', 0.5)">1/2</button>
+      <button onclick="setBet('minesBet', 1)">Max</button>
+    </div>
+    <label>Mines:</label>
+    <select id="mineCount">
+      <option>1</option><option>3</option><option selected="">5</option><option>7</option><option>10</option>
+    </select>
+    <br>
+    <button onclick="startMines()">Start Game</button>
+    <button onclick="cashOut()">💵 Cashout</button>
+    <button onclick="randomPick()">🎯 Random Pick</button>
+    <p id="minesResult"></p>
+    <div id="grid"></div>
+  </div>
+
+  <script>
+    let balance = parseFloat(localStorage.getItem('balance') || '1000');
+    let minePositions = [];
+    let revealed = 0;
+    let betAmount = 0;
+    const totalTiles = 25;
+
+    function updateBalance() {
+      document.getElementById('balanceDisplay').textContent = balance.toFixed(2);
+      localStorage.setItem('balance', balance);
+    }
+
+    function setBet(inputId, factor) {
+      const input = document.getElementById(inputId);
+      input.value = (balance * factor).toFixed(2);
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    function deposit() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      if (amount >= 0.10) {
+        balance += amount;
+        updateBalance();
+      }
+    }
+
+    function withdraw() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      if (amount >= 0.10 && amount <= balance + 0.01) {
+        balance -= amount;
+        updateBalance();
+      }
+    }
+
+    function flipCoin(choice) {
+      const bet = parseFloat(document.getElementById('coinBet').value);
+      if (bet < 0.10 || bet > balance + 0.01) return alert("Invalid bet.");
+      balance -= bet;
+      updateBalance();
+
+      const result = Math.random() < 0.5 ? 'heads' : 'tails';
+      const coin = document.getElementById('coin');
+      coin.style.transition = 'none';
+      coin.style.transform = 'rotateY(0deg)';
+      void coin.offsetWidth;
+      coin.style.transition = 'transform 2s ease-in-out';
+
+      let spins = 3;
+      let randomSpin = Math.random() < 0.5 ? 360 : -360;
+      coin.style.transform = `rotateY(${randomSpin * spins}deg)`;
+
+      setTimeout(() => {
+        coin.style.transform = result === 'heads' ? 'rotateY(0deg)' : 'rotateY(180deg)';
+        setTimeout(() => {
+          if (choice === result) {
+            balance += bet * 2;
+            document.getElementById('coinflipResult').textContent = `You won! It's ${result}`;
+          } else {
+            document.getElementById('coinflipResult').textContent = `You lost! It's ${result}`;
+          }
+          updateBalance();
+        }, 1000);
+      }, 2000);
+    }
+
+    function startMines() {
+      const bet = parseFloat(document.getElementById('minesBet').value);
+      const mineCount = parseInt(document.getElementById('mineCount').value);
+      if (bet < 0.10 || bet > balance + 0.01) return alert("Invalid bet.");
+
+      balance -= bet;
+      updateBalance();
+      betAmount = bet;
+      minePositions = [];
+      revealed = 0;
+
+      const grid = document.getElementById('grid');
+      const result = document.getElementById('minesResult');
+      result.textContent = '';
+      grid.innerHTML = '';
+
+      while (minePositions.length < mineCount) {
+        const pos = Math.floor(Math.random() * totalTiles);
+        if (!minePositions.includes(pos)) minePositions.push(pos);
+      }
+
+      for (let i = 0; i < totalTiles; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        const inner = document.createElement('div');
+        inner.className = 'tile-inner';
+
+        const front = document.createElement('div');
+        front.className = 'tile-front';
+        const back = document.createElement('div');
+        back.className = 'tile-back';
+
+        inner.appendChild(front);
+        inner.appendChild(back);
+        tile.appendChild(inner);
+
+        tile.onclick = () => {
+          tile.classList.add('flipped');
+          if (minePositions.includes(i)) {
+            back.classList.add('bomb');
+            back.textContent = '💥';
+            document.getElementById('minesResult').textContent = 'Boom! Game over.';
+            document.querySelectorAll('.tile').forEach(t => t.onclick = null);
+          } else {
+            back.classList.add('safe');
+            back.textContent = '✅';
+            tile.onclick = null;
+            revealed++;
+            updateCashoutText(mineCount);
+          }
+        };
+
+        grid.appendChild(tile);
+      }
+    }
+
+    function updateCashoutText(mineCount) {
+      const multiplier = 1 + (revealed * (0.20 - 0.005 * mineCount));
+      const potential = betAmount * multiplier;
+      document.getElementById('minesResult').textContent = `✅ Safe: ${revealed} – Cashout: $${potential.toFixed(2)}`;
+    }
+
+    function cashOut() {
+      if (revealed > 0) {
+        const mineCount = parseInt(document.getElementById('mineCount').value);
+        const multiplier = 1 + (revealed * (0.20 - 0.005 * mineCount));
+        const payout = betAmount * multiplier;
+        balance += payout;
+        updateBalance();
+        document.getElementById('minesResult').textContent = `You cashed out $${payout.toFixed(2)}!`;
+        document.querySelectorAll('.tile').forEach(t => t.onclick = null);
+      }
+    }
+
+    function randomPick() {
+      const tiles = Array.from(document.querySelectorAll('.tile')).filter(t => t.onclick !== null);
+      if (tiles.length === 0) return;
+      const index = Math.floor(Math.random() * tiles.length);
+      tiles[index].click();
+    }
+
+    updateBalance();
+  </script>
